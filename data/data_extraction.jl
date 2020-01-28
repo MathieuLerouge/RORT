@@ -63,4 +63,4 @@ function extract_data(file_name)
 
 end
 
-print(extract_data("E_data.txt"))
+#print(extract_data("E_data.txt"))
