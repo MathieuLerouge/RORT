@@ -27,4 +27,4 @@ function extract_data(file_name)
 end
 
 
-extract_data("E_data.txt")
+## extract_data("E_data.txt")
