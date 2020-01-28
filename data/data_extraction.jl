@@ -15,7 +15,7 @@ function extract_data(file_name)
     # Read lines
     lines = readlines(f)
     for l in lines
-       println(l[0])
+       println(l)
     end
 
     # Close the text file
@@ -27,4 +27,4 @@ function extract_data(file_name)
 end
 
 
-#extract_data("E_data.txt")
+extract_data("E_data.txt")
