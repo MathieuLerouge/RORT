@@ -25,7 +25,7 @@ function extract_data(file_name)
         i = parse(Int64, words[1])
         es[i] = parse(Int64, words[2])
         ls[i] = parse(Int64, words[3])
-        type = parse(Int64, words[3])
+        type = parse(Int64, words[4])
         if (type == 0)
             push!(I, i)
         else
@@ -63,5 +63,5 @@ function extract_data(file_name)
 
 end
 
-print(extract_data("/Users/lerougemathieu/Documents/Courses/MPRO/RORT/Project/data/E_data.txt"))
-#print(extract_data("E_data.txt"))
+#print(extract_data("/Users/lerougemathieu/Documents/Courses/MPRO/RORT/Project/data/E_data.txt"))
+#println(extract_data("/Users/camillegrange/Documents/RORT/data/E_data.txt"))
