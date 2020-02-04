@@ -23,8 +23,8 @@ function extract_data(file_name)
     for l in lines[2:(n + 1)]
         words = split(l)
         i = parse(Int64, words[1])
-        es = parse(Int64, words[2])
-        ls = parse(Int64, words[3])
+        es[i] = parse(Int64, words[2])
+        ls[i] = parse(Int64, words[3])
         type = parse(Int64, words[3])
         if (type == 0)
             push!(I, i)
@@ -36,7 +36,7 @@ function extract_data(file_name)
     # Read second block of lines, i.e data about the arcs
     distances = Dict{Tuple{Int64,Int64},Int64}()
     times = Dict{Tuple{Int64,Int64},Int64}()
-    for l in lines[(3+n):end]
+    for l in lines[(2+n):end]
         words = split(l)
         i = parse(Int64, words[1])
         j = parse(Int64, words[2])
@@ -58,9 +58,10 @@ function extract_data(file_name)
     close(f)
 
     # Output all data
-    #n, m, r, g, Q, es, ls, distances, times
+    #n, m, r, g, Q, es, ls, neighbors_in, neighbors_out, distances, times
     n, r, g, Q, es, ls, I, F, neighbors_in, neighbors_out, distances, times
 
 end
 
+print(extract_data("/Users/lerougemathieu/Documents/Courses/MPRO/RORT/Project/data/E_data.txt"))
 #print(extract_data("E_data.txt"))
