@@ -1,9 +1,9 @@
 # Function extract data from data file
-# file_name must be a string which contains the extension
-function extract_data(file_name)
+# file_path must be a string which contains the extension
+function extract_data(file_path)
 
     # Open the text file and read lines
-    f = open(file_name)
+    f = open(file_path)
     lines = readlines(f)
 
     # Read first line, i.e general data about the problem
@@ -32,6 +32,8 @@ function extract_data(file_name)
             push!(F, i)
         end
     end
+    I = setdiff(I, [1, n])
+    F = setdiff(F, [1, n])
 
     # Read second block of lines, i.e data about the arcs
     distances = Dict{Tuple{Int64,Int64},Int64}()
@@ -58,10 +60,6 @@ function extract_data(file_name)
     close(f)
 
     # Output all data
-    #n, m, r, g, Q, es, ls, neighbors_in, neighbors_out, distances, times
-    n, r, g, Q, es, ls, I, F, neighbors_in, neighbors_out, distances, times
+    n, m, r, g, Q, es, ls, I, F, neighbors_in, neighbors_out, distances, times
 
 end
-
-#print(extract_data("/Users/lerougemathieu/Documents/Courses/MPRO/RORT/Project/data/E_data.txt"))
-#println(extract_data("/Users/camillegrange/Documents/RORT/data/E_data.txt"))
