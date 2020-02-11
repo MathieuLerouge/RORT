@@ -13,10 +13,6 @@ data_folder_path = string(folder_path, data_folder)
 include(string(data_folder_path, "data_extraction.jl"))
 
 
-## MODEL ##
-
-
-
 ## DATA ##
 
 ## neighbours_in[i] = liste des j tq existe (j,i)
@@ -28,11 +24,7 @@ n_tot, m, r, g, Q, es, ls, I, F_prime,
     neighbours_in, neighbours_out, distances, times =
     extract_data(string(data_folder_path, file_name))
 
-
-
 n = n_tot - 2
-
-println(I)
 
 #Pas de temps de services :
 s = [0 for i in 1:n+2]
@@ -103,7 +95,7 @@ end
 function solve_master(routes)
 
     model = Model(with_optimizer(GLPK.Optimizer))
-    K = len(routes)
+    K = length(routes)
 
     ## VARIABLES ##
     @variable(model, delta[i in 1:K], Bin)
@@ -111,12 +103,12 @@ function solve_master(routes)
     ## CONSTRAINTS ##
 
     @constraint(model, ct_1[i in I],
-        sum(sum(routes[k,i,j] for i in 1:n+1 for j in 2:n+2 if (i,j) in keys(distances))*delta[k] for k in 1:K) == 1)
+        sum(sum(routes[k][i,j] for j in 2:n+2 if (i,j) in keys(distances))*delta[k] for k in 1:K) == 1)
 
     ## OBJECTIF ##
 
     @objective(model, Min,
-        sum(sum(routes[k,i,j]*distances[(i,j)] for i in 1:n+1 for j in 2:n+2 if (i,j) in keys(distances))*delta[k] for k in 1:K))
+        sum(sum(routes[k][i,j]*distances[(i,j)] for i in 1:n+1 for j in 2:n+2 if (i,j) in keys(distances))*delta[k] for k in 1:K))
 
     ## SOLVING ##
 
@@ -137,7 +129,7 @@ end
 function fill_graph(n_tot, m, r, g, Q, es, ls, I, F_prime,
     neighbours_in, neighbours_out, distances, times)
     infinite = 10000
-    for(i in I)
+    for i in I
         neighbours_in[i] = union(neighbours_in[i], 1)
         neighbours_out[i] = union(neighbours_out[i], n+2)
         if((1,i) in keys(distances))
@@ -157,26 +149,25 @@ end
 
 function routes_init()
     khi = []
-    E = (n+2)*(n+1)
-    for(i in I)
-        route_i = zeros(Int64, E)
-        route_i[i] = 1 # l'arc (i,j) est à l'indice (i-1)*(n+2) + j (lignes commencent à 0 mais colonnes à 1)
-        route_i[(i-1)*(n+2) + n + 2] = 1
-        append(khi, route_i)
+    for i in I
+        route_i = zeros(Int64, n+2, n+2)
+        route_i[1,i] = 1 # l'arc (i,j) est à l'indice (i-1)*(n+2) + j (lignes commencent à 0 mais colonnes à 1)
+        route_i[i,n+2] = 1
+        append!(khi, route_i)
     end
     khi
 end
 
-function genCol(routes_init)
+function genCol(routes_ini)
 
     redCost = -1
-    routes = routes_init.copy()
+    routes = deepcopy(routes_ini)
 
     while(redCost < 0)
 
         obj, delta, var_duales = solve_master(routes)
         redCost, newRoute = solve_slave(var_duales)
-        append(routes, newRoute)
+        append!(routes, newRoute)
     end
     routes, obj, delta
 end
@@ -188,6 +179,6 @@ end
 
 fill_graph(n_tot, m, r, g, Q, es, ls, I, F_prime, neighbours_in, neighbours_out, distances, times)
 
-routes_init = routes_init()
+routes_ini = routes_init()
 
-genCol(routes_init)
+genCol(routes_ini)
