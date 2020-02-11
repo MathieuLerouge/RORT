@@ -6,8 +6,8 @@ using GLPK
 
 ## INCLUDE ##
 
-#folder_path = "/Users/camillegrange/Documents/RORT/"
-folder_path = "/Users/lerougemathieu/Documents/Courses/MPRO/RORT/Project/"
+folder_path = "/Users/camillegrange/Documents/RORT/"
+#folder_path = "/Users/lerougemathieu/Documents/Courses/MPRO/RORT/Project/"
 data_folder = "data/"
 data_folder_path = string(folder_path, data_folder)
 include(string(data_folder_path, "data_extraction.jl"))
@@ -31,9 +31,15 @@ n_tot, m, r, g, Q, es, ls, I, F_prime,
 
 n = n_tot - 2
 
+println(I)
+
+#Pas de temps de services :
 s = [0 for i in 1:n+2]
+#Pas de colis à livrer :
 q = [0 for i in 1:n+2]
-C = 100000
+#Capacité des voitures :
+C=100000
+
 
 
 ## VARIABLES ##
@@ -46,17 +52,17 @@ C = 100000
 
 ## CONSTRAINTS ##
 
-@constraint(model, ct_1[i in I ; i!= 1 && i!=n+2],
+@constraint(model, ct_1[i in I],
     sum(x[i,j] for j in neighbours_out[i] if j!=1) == 1)
-@constraint(model, ct_2[i in F_prime; i!= 1 && i!=n+2],
+@constraint(model, ct_2[i in F_prime],
     sum(x[i,j] for j in neighbours_out[i] if j!=1) <= 1)
 @constraint(model, ct_3[j in 2:n+1],
     sum(x[j,i] for i in neighbours_out[j] if i != 1) -
     sum(x[i,j] for i in neighbours_in[j] if i != n+2) == 0)
-@constraint(model, ct_4[i in I, j in 2:n+2 ; (i,j) in keys(distances) && i != n+2],
+@constraint(model, ct_4[i in union(I, 1), j in 2:n+2 ; (i,j) in keys(distances)],
     tau[i]+(times[(i,j)] + s[i])*x[i,j] - ls[1]*(1-x[i,j]) <= tau[j])
 @constraint(model, ct_5[i in F_prime, j in 2:n+2;
-    (i,j) in keys(distances) && i != 1 && i != n+2],
+    (i,j) in keys(distances)],
     tau[i]+times[(i,j)]*x[i,j] + g*(Q-y[i]) - (ls[1] + g*Q)*(1-x[i,j]) <= tau[j])
 @constraint(model, ct_6[j in 1:n+2], es[j] <= tau[j])
 @constraint(model, ct_7[j in 1:n+2], tau[j] <= ls[j])
@@ -64,9 +70,9 @@ C = 100000
     u[j] <= u[i] - q[i]*x[i,j] + C*(1-x[i,j]))
 @constraint(model, ct_9, u[1] <= C)
 @constraint(model, ct_10[i in I, j in 2:n+2;
-    (i,j) in keys(distances) && i != 1 && i != n+2],
+    (i,j) in keys(distances)],
     y[j] <= y[i] - r*distances[(i,j)]*x[i,j] + Q*(1-x[i,j]))
-@constraint(model, ct_11[i in F_prime, j in 2:n+2;
+@constraint(model, ct_11[i in union(F_prime,1), j in 2:n+2;
     (i,j) in keys(distances) && i != n+2],
     y[j] <= Q - r*distances[(i,j)]*x[i,j])
 
