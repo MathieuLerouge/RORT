@@ -31,8 +31,6 @@ n_tot, m, r, g, Q, es, ls, I, F_prime,
 
 n = n_tot - 2
 
-println(I)
-
 #Pas de temps de services :
 s = [0 for i in 1:n+2]
 #Pas de colis à livrer :
@@ -40,7 +38,9 @@ q = [0 for i in 1:n+2]
 #Capacité des voitures :
 C=100000
 
-
+# Delete infeasible arcs
+clear_graph(n, m, r, g, Q, es, ls, I, F_prime, neighbours_in,
+    neighbours_out, distances, times, s, q, C)
 
 ## VARIABLES ##
 

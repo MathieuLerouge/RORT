@@ -63,3 +63,65 @@ function extract_data(file_path)
     n, m, r, g, Q, es, ls, I, F, neighbors_in, neighbors_out, distances, times
 
 end
+
+
+function clear_graph(n, m, r, g, Q, es, ls, I, F, neighbors_in,
+    neighbors_out, distances, times, s, q, C)
+
+    # Count arcs deleted
+    nb_arcs_deleted = 0
+
+    # Delete infeasible arcs
+    for (i,j) in keys(times)
+        deleted = false
+        if es[i] + s[i] + times[(i,j)] >= ls[j]
+            # arc (i,j) deleted
+            pop!(times, (i,j))
+            println(times)
+            pop!(distances, (i,j))
+            pop!(neighbors_out[i], j)
+            pop!(neighbors_in[j], i)
+            nb_arcs_deleted += 1
+            break
+        end
+
+        if (j,n+2) in keys(times)
+            if es[i] + s[i] + times[(i,j)] + s[j] + times[(j,n+2)] >= ls[1]
+                # arc (i,j) deleted
+                pop!(times, (i,j))
+                pop!(distances, (i,j))
+                pop!(neighbors_out[i], j)
+                pop!(neighbors_in[j], i)
+                nb_arcs_deleted += 1
+                break
+            end
+        end
+
+        if q[i] + q[j] >= C
+            # arc (i,j) deleted
+            pop!(times, (i,j))
+            pop!(distances, (i,j))
+            pop!(neighbors_out[i], j)
+            pop!(neighbors_in[j], i)
+            nb_arcs_deleted += 1
+            break
+        end
+
+        for (u,i) in keys(times)
+            for (j,v) in keys(times)
+                if r*(distances[(u,i)] + distances[(i,j)] + distances[j,v]) >= Q
+                    # arc (i,j) deleted
+                    pop!(times, (i,j))
+                    pop!(distances, (i,j))
+                    pop!(neighbors_out[i], j)
+                    pop!(neighbors_in[j], i)
+                    nb_arcs_deleted += 1
+                    break
+                end
+            end
+        end
+
+    end
+
+    println(nb_arcs_deleted, " arcs have been deleted because of their infeasibility.")
+end
