@@ -2,6 +2,7 @@
 ## LIBRAIRIES ##
 ################
 
+
 using JuMP
 using GLPK
 
@@ -10,6 +11,7 @@ using GLPK
 #############
 ## INCLUDE ##
 #############
+
 
 # Set folder_path
 #folder_path = "/Users/camillegrange/Documents/RORT/"
@@ -25,6 +27,7 @@ include(string(data_folder_path, "data_extraction.jl"))
 ################
 ## SUBPROBLEM ##
 ################
+
 
 function solve_subproblem(dual_values)
 
@@ -45,6 +48,9 @@ function solve_subproblem(dual_values)
 
 
     ## CONSTRAINTS ##
+
+    # Unique route
+    @constraint(model, cst_0, sum(x[1,j] for j in neighbours_out[1]) == 1)
 
     # Flow conservation (4)
     @constraint(model, cst_4[j in 2:n+1],
@@ -104,17 +110,42 @@ function solve_subproblem(dual_values)
 
 end
 
+# Deprecated
+# function display_route(route, n_tot)
+#     for i in 1:n_tot
+#         println(route[i, :])
+#     end
+# end
+
+function convert_route_into_path(route, n_tot)
+    path = [1]
+    i = 1
+    while i != n_tot
+        j = 2
+        while route[i, j] != 1
+            j += 1
+        end
+        i = j
+        push!(path, i)
+    end
+    path
+end
+
+function display_route_as_path(route, n_tot)
+    println(convert_route_into_path(route, n_tot))
+end
 
 
 ####################
 ## MASTER PROBLEM ##
 ####################
 
-function solve_master(routes)
+
+function solve_master(routes, n, I, distances)
 
     ## GLOBAL VARIABLES ##
 
-    # Get the number of routes
+    # Get the Number of vehicules
     K = length(routes)
 
 
@@ -133,10 +164,15 @@ function solve_master(routes)
     ## CONSTRAINTS ##
 
     # Delivery constraint
+    # ** WIP **
     @constraint(model, cst[i in I],
         sum( sum(routes[k][i,j]
             for j in 2:n+2 if (i,j) in keys(distances))*delta[k]
         for k in 1:K) == 1)
+    # @constraint(model, cst[i in I],
+    #     sum( sum(routes[k][i,j]
+    #         for j in 2:n+2 if (i,j) in keys(distances))*delta[k]
+    #     for k in 1:K) >= 1)
 
 
     ## OBJECTIVE ##
@@ -162,16 +198,16 @@ function solve_master(routes)
     nb_routes = Int(sum(delta_star))
 
     # Output
-    total_distance, nb_routes
+    total_distance, nb_routes, delta_star
 
 end
 
 
-function solve_relaxed_master(routes)
+function solve_relaxed_master(routes, n, I, distances)
 
     ## GLOBAL VARIABLES ##
 
-    # Get the number of routes
+    # Get the Number of vehicules
     K = length(routes)
 
 
@@ -189,7 +225,7 @@ function solve_relaxed_master(routes)
 
     ## CONSTRAINTS ##
 
-    # Delivery constraint
+    # Deefine delivery constraint
     @constraint(model, cst_bin[i in K], delta[i] <= 1)
     @constraint(model, cst[i in I],
         sum( sum(routes[k][i,j]
@@ -231,23 +267,23 @@ end
 ## INITIALIZATION OF MASTER PROBLEM ##
 ######################################
 
+
 # Function which adds arcs (0, i) and (i, n+1)
 # with infinite distances and times, if needed
-function fill_graph(n_tot, m, r, g, Q, es, ls, I, F,
-    neighbours_in, neighbours_out, distances, times)
+function fill_graph(n_tot, I, neighbours_in, neighbours_out, distances, times)
     infinite = 10000
     added_arcs_counter = 0
     for i in I
         neighbours_in[i] = union(neighbours_in[i], 1)
-        neighbours_out[i] = union(neighbours_out[i], n+2)
-        if !((1,i) in keys(distances))
+        neighbours_out[i] = union(neighbours_out[i], n_tot)
+        if !((1, i) in keys(distances))
             distances[(1, i)] = infinite
             times[(1, i)] = infinite
             added_arcs_counter += 1
         end
-        if !((i, n+2) in keys(distances))
-            distances[(i, n+2)] = infinite
-            times[(i, n+2)] = infinite
+        if !((i, n_tot) in keys(distances))
+            distances[(i, n_tot)] = infinite
+            times[(i, n_tot)] = infinite
             added_arcs_counter += 1
         end
     end
@@ -256,27 +292,27 @@ end
 
 # Function which creates initial routes of the form
 # {(0, i), (i, n+1)} for i in I
-function initialize_routes()
+function initialize_routes(n_tot, I)
     routes = []
     for i in I
-        route_i = zeros(Int64, n+2, n+2)
+        route_i = zeros(Int64, n_tot, n_tot)
         route_i[1, i] = 1
-        route_i[i, n+2] = 1
+        route_i[i, n_tot] = 1
         push!(routes, route_i)
     end
     routes
 end
 
 # Function to prepare column generation
-function prepare_column_generation(n_tot, m, r, g, Q, es, ls, I, F,
+function prepare_column_generation(n_tot, I,
     neighbours_in, neighbours_out, distances, times)
 
     # Add arcs for initialization if needed
-    added_arcs_counter = fill_graph(n_tot, m, r, g, Q, es, ls, I, F,
+    added_arcs_counter = fill_graph(n_tot, I,
         neighbours_in, neighbours_out, distances, times)
 
     # Initialize routes for the first iteration if the master problem
-    routes = initialize_routes()
+    routes = initialize_routes(n_tot, I)
 
     # Output
     routes, added_arcs_counter
@@ -288,6 +324,7 @@ end
 #######################
 ## COLUMN GENERATION ##
 #######################
+
 
 function run_column_generation(routes, display_process)
 
@@ -309,12 +346,18 @@ function run_column_generation(routes, display_process)
         while reduced_cost < -epsilon
             println("- ITERATION ", new_routes_counter)
             println("1. Running model of the master problem")
-            total_distance, nb_routes = solve_master(routes)
+            total_distance, nb_routes, routes_selection =
+                solve_master(routes, n, I, distances)
             println("Done")
-            println("Number of routes: ", nb_routes)
+            println("Number of vehicules: ", nb_routes)
             println("Total distance: ", total_distance)
+            for k in 1:length(routes) if Int(routes_selection[k])==1
+                route = routes[k]
+                println("Selected route ", k, ":")
+                display_route_as_path(route, n+2)
+            end end
             println("2. Running model of the relaxed master problem")
-            dual_values = solve_relaxed_master(routes)
+            dual_values = solve_relaxed_master(routes, n, I, distances)
             println("Done")
             println("3. Running subproblem")
             new_route, reduced_cost = solve_subproblem(dual_values)
@@ -325,8 +368,9 @@ function run_column_generation(routes, display_process)
         end
     else
         while reduced_cost < -epsilon
-            total_distance, nb_routes = solve_master(routes)
-            dual_values = solve_relaxed_master(routes)
+            total_distance, nb_routes, routes_selection =
+                solve_master(routes, n, I, distances)
+            dual_values = solve_relaxed_master(routes, n, I, distances)
             new_route, reduced_cost = solve_subproblem(dual_values)
             push!(routes, new_route)
             new_routes_counter += 1
@@ -348,8 +392,8 @@ end
 ## VARIABLES TO SET ##
 
 # Set boolean for measuring running time
-measuring_time = true
-#measuring_time = false
+#measuring_time = true
+measuring_time = false
 
 # Set boolean for simplifying the graph of connections
 # by removing unfeasible arcs
@@ -359,8 +403,8 @@ simplifying_graph = true
 # Set file_name
 #file_name = "E_data.txt"
 #file_name = "E_data_1.txt"
-file_name = "E_data_2.txt"
-#file_name = "E_data_3.txt"
+#file_name = "E_data_2.txt"
+file_name = "E_data_3.txt"
 
 
 ## OTHER VARIABLES ##
@@ -396,11 +440,11 @@ n = n_tot - 2
 
 # Complete data
 # Assumption: no time service
-s = [0 for i in 1:n+2]
+s = [0 for i in 1:n_tot]
 # Assumption: no demand to deliver
-#q = [0 for i in 1:n+2]
+q = [0 for i in 1:n_tot]
 # Assumption: infinite capacity of vehicules
-#C = 100000
+C = 100000
 
 # Delete unfeasible arcs
 nb_deleted_arcs = 0
@@ -433,12 +477,15 @@ end
 # Display performances
 if simplifying_graph || measuring_time
     println("- PERFORMANCES")
-    if simplifying_graph
-        println("Number of deleted unfeasible arcs: ", nb_deleted_arcs)
-        println("Elapsed time to simplify graph: ", graph_simplification_time, "s")
-    end
     if measuring_time
         println("Elapsed time to extract data: ", data_extraction_time, "s")
+    end
+    if simplifying_graph
+        println("Number of deleted unfeasible arcs: ", nb_deleted_arcs)
+        if measuring_time
+            println("Elapsed time to simplify graph: ",
+                graph_simplification_time, "s")
+        end
     end
 end
 
@@ -459,7 +506,7 @@ println("\n",
 # Compile code if measuring time
 # Basically, run functions once so that they are all compiled
 if measuring_time
-    _, _ = prepare_column_generation(n_tot, m, r, g, Q, es, ls, I, F,
+    _, _ = prepare_column_generation(n_tot, I,
         neighbours_in, neighbours_out, deepcopy(distances), deepcopy(times))
     _, _, _ = run_column_generation(routes, false)
 end
@@ -467,7 +514,7 @@ end
 # Prepare column generation
 # In particular, initialize a first set of routes
 initialization_time = @elapsed routes, added_arcs_counter =
-    prepare_column_generation(n_tot, m, r, g, Q, es, ls, I, F,
+    prepare_column_generation(n_tot, I,
         neighbours_in, neighbours_out, distances, times)
 println("- GRAPH ALTERATIONS")
 println("Number of infinite arcs added to the graph: ", added_arcs_counter)
@@ -479,10 +526,8 @@ if display_process
     println("- INITIALIZATION")
     println("Number of initial routes: ", length(routes))
     for route in routes
-        println("Route ", route_index, ":")
-        for i in 1:n+2
-            println(route[i, :])
-        end
+        println("Initial route ", route_index, ":")
+        display_route_as_path(route, n_tot)
         global route_index += 1
     end
     println("")
@@ -494,7 +539,7 @@ column_generation_time = @elapsed total_distance, nb_routes,
 
 # Display results
 println("- OPTIMAL VALUES")
-println("Number of routes: ", nb_routes)
+println("Number of vehicules: ", nb_routes)
 println("Total distance: ", total_distance)
 println("")
 

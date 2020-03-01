@@ -76,10 +76,11 @@ end
 ## SIMPLIFICATIONS ##
 #####################
 
+
 # Function which simplifies the graph of connections
 # by removing unfeasible arcs
-function clear_graph(n, m, r, g, Q, es, ls, I, F, neighbors_in,
-    neighbors_out, distances, times, s, q, C)
+function clear_graph(n, m, r, g, Q, es, ls, I, F,
+    neighbors_in, neighbors_out, distances, times, s, q, C)
 
     # Count deleted arcs
     nb_deleted_arcs = 0
@@ -100,7 +101,7 @@ function clear_graph(n, m, r, g, Q, es, ls, I, F, neighbors_in,
 
         # Delete arc (i,j) if it violates time windows constraints (15)
         if (j,n+2) in keys(times)
-            if es[i] + s[i] + times[(i,j)] + s[j] + times[(j,n+2)] >= ls[1]
+            if es[i] + s[i] + times[(i,j)] + s[j] + times[(j,n+2)] >= ls[n+2]
                 # Delete arc (i,j) from all data structures
                 pop!(times, (i,j))
                 pop!(distances, (i,j))
