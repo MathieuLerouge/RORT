@@ -1,378 +1,213 @@
+################
+## LIBRAIRIES ##
+################
+
+
+using JuMP
+using GLPK
+
+
+
 #############
 ## INCLUDE ##
 #############
 
 
-# Provide folder_path
-#folder_path = "/Users/camillegrange/Documents/RORT/"
-folder_path = "/Users/lerougemathieu/Documents/Courses/MPRO/RORT/Project/"
-
-# Do not change
-data_folder = "data/"
-data_folder_path = string(folder_path, data_folder)
-include(string(data_folder_path, "data_extraction.jl"))
+# Include file about routes implementation
+include("routes_implementation.jl")
 
 
 
-#########################
-## AUXILIARY FUNCTIONS ##
-#########################
+##########################
+## GENERATION OF ROUTES ##
+##########################
 
 
-    ##################################
-    ## FILTERING CUSTOMERS FUNCTION ##
-    ##################################
+function generate_route(must_be_visited_I,
+    non_visited_I, avg_distance, penalization_factor,
+    n, r, g, Q, es, ls, I, F,
+    neighbours_in, neighbours_out, distances, times)
 
-# Let be a vehicule at index i, time t, battery level y.
-# The function below compute which customers are feasible from the current state
-# where feasible means that the vehicule can reach the customer
-# (while satisfying time window, battery and stock)
-# and that the vehicule can leave the customer to another node (same constraints)
-# Assumption : zero service time, zero demands
-function get_feasible_customers(i, t, y, non_visited_customers,
-    n_total, r, g, Q, es, ls, stations, neighbors_out, times, distances)
+    ## VARIABLES ##
+    n_tot = n+2
 
-    # Initialize variables
-    feasible_customers = Set{Int}()
-    second_chance_customers = Set{Int}()
+    ## MODEL ##
 
-    # Global variable
-    l_end_depot = ls[n_total]
-
-    # Loop over non-visited customers j s.t. there is an arc (i,j)
-    for j in non_visited_customers
-    if (j in neighbors_out[i])
-
-        # Get time and distance to go from i to customer j
-        t_ij = times[(i,j)]
-        d_ij = distances[(i,j)]
-
-        # Check if reaching the customer j is feasible time-wise
-        if (t + t_ij > ls[j])
-            # If it is not the case, forget about this customer
-            # and study the next one
-            continue
-        end
-
-        # Check if reaching the customer j is feasible energy-wise
-        if (y - r*d_ij < 0)
-            # If it is not the case, forget about this customer
-            # and study the next one
-            # But as the customer may be reachable if the vehicule would go
-            # by a recharging station then it may become feasible,
-            # therefore we put it in the second-chance customers
-            push!(second_chance_customers, j)
-            continue
-        end
-
-        # Check if leaving the customer j is feasible
-        check_leaving = false
-
-        # Option 1: leaving by going to the end depot
-        if (n_total in neighbors_out[j])
-            t_j_end = times[(j, n_total)]
-            d_j_end = distances[(j, n_total)]
-            if (t + t_ij + t_j_end < l_end_depot)
-                if (y - r*(d_ij + d_j_end) > 0)
-                    check_leaving = true
-                else
-                    push!(second_chance_customers, j)
-                end
-            end
-        end
-
-        # Option 2: leaving by going by a recharging station
-        if (!check_leaving)
-
-            # Compute neighbor stations
-            neighbor_stations = intersect(stations, neighbors_out[j])
-
-            # If there is no neighboring station
-            # then forget about the customer j and study the next one
-            if (isempty(neighbor_stations))
-                continue
-            end
-
-            # Otherwise, let check if there is a feasible_station
-            check_feasible_station = false
-            while (!isempty(neighbor_stations) && !check_feasible_station)
-
-                # Get one station
-                station = pop!(neighbor_stations)
-
-                # Check if the recharging station is reachable
-                min_j_station = min(j, station)
-                max_j_station = max(j, station)
-                t_j_station = times[(min_j_station, max_j_station)]
-                d_j_station = distances[(min_j_station, max_j_station)]
-                l_station = ls[station]
-                if ((t + t_ij + t_j_station > l_station) ||
-                    (y - r*(d_ij + d_j_station) < 0))
-                        continue
-                end
-
-                # Check if leaving the station is feasible
-                t_station_end = times[(station, n_total)]
-                d_station_end = distances[(station, n_total)]
-                arriving_t_station = max(es[station], t + t_ij + t_j_station)
-                delta_y_station = Q - (y - r*(d_ij + d_j_station))
-                if ((arriving_t_station + g*delta_y_station +
-                        t_station_end > l_end_depot) ||
-                    (Q - r*d_station_end < 0))
-                        continue
-                end
-
-                # If both checks
-                check_feasible_station = true
-            end
-
-            if (!check_feasible_station)
-                continue
-            end
-        end
-
-        # Add the customer j to the feasible customer
-        push!(feasible_customers, j)
-
-    end
-    end
-
-    # Output
-    feasible_customers, second_chance_customers
-
-end
+    # Define the model
+    model = Model(with_optimizer(GLPK.Optimizer))
 
 
-    ###################################
-    ## ENDING OR RECHARGING FUNCTION ##
-    ###################################
+    ## DECISION VARIABLES ##
 
-# Let be a vehicule at index i, time t, battery level y
-# If no non-visited neighboring customers are reachable from i,
-# then the vehicule must either go to the end depot or to a recharging station
-function choose_end_or_recharge(i, t, y, second_chance_customers,
-    n_total, r, g, Q, es, ls, stations, neighbors_out, times, distances)
+    # Define the decision variables
+    @variable(model, x[i in 1:n+1,j in 2:n+2], Bin)
+    @variable(model, tau[i in 1:n+2] >= 0)
+    # Assumption: no demand to deliver
+    #@variable(model, u[i in 1:n+2] >= 0)
+    @variable(model, y[i in 1:n+2] >= 0)
 
-    # Initialize next node variable
-    # next_node will be the index of the end deport or a recharging station
-    next_node = -1
 
-    # Case 1: if there is no arc (i,j) with j end depot,
-    # then there is no other choice than going to a recharging station
-    if (!(n_total in neighbors_out[i]))
-        neighbor_stations = intersect(stations, neighbors_out[i])
-        if (isempty(neighbor_stations))
-            println("Error: no reachable recharging station")
-        else
-            next_node = pop!(neighbor_stations)
-            push!(neighbor_stations, next_node)
-        end
+    ## CONSTRAINTS ##
 
-    # Case 2: if there exists an arc (i,j) with j end depot,
-    # then the vehicule can either go to the end depot
-    # or it can go a recharging station in the hope that
-    # there will be feasible customers
+    # Unique route
+    @constraint(model, cst_unique, sum(x[1,j] for j in neighbours_out[1]) == 1)
+
+    # Compulsory visit
+    @constraint(model, cst_visit[i in must_be_visited_I],
+        sum(x[i,j] for j in neighbours_out[i]) == 1)
+
+    # Flow conservation (4)
+    @constraint(model, cst_4[j in 2:n+1],
+        sum(x[j,i] for i in neighbours_out[j]) -
+        sum(x[i,j] for i in neighbours_in[j]) == 0)
+
+    # Time feasability when leaving customers and depot (5)
+    @constraint(model, cst_5[i in union(I, 1), j in 2:n+2; (i,j) in keys(distances)],
+        tau[i]+(times[(i,j)] + s[i])*x[i,j] - ls[1]*(1-x[i,j]) <= tau[j])
+
+    # Time feasability when leaving recharging stations (6)
+    @constraint(model, cst_6[i in F, j in 2:n+2; (i,j) in keys(distances)],
+        tau[i]+times[(i,j)]*x[i,j] + g*(Q-y[i]) - (ls[1] + g*Q)*(1-x[i,j])
+        <= tau[j])
+
+    # Time windows (7)
+    @constraint(model, cst_7[j in 1:n+2], es[j] <= tau[j])
+    @constraint(model, cst_7bis[j in 1:n+2], tau[j] <= ls[j])
+
+    # Demand feasability (8) and (9)
+    # Assumption: no demand to deliver
+    #@constraint(model, cst_8[i in 1:n+1, j in 2:n+2; (i,j) in keys(distances)],
+    #    u[j] <= u[i] - q[i]*x[i,j] + C*(1-x[i,j]))
+    #@constraint(model, cst_9, u[1] <= C)
+
+    # Battery feasability (10) and (11)
+    @constraint(model, cst_10[i in I, j in 2:n+2;
+        (i,j) in keys(distances)],
+        y[j] <= y[i] - r*distances[(i,j)]*x[i,j] + Q*(1-x[i,j]))
+    @constraint(model, cst_11[i in union(F,1), j in 2:n+2;
+        (i,j) in keys(distances)],
+        y[j] <= Q - r*distances[(i,j)]*x[i,j])
+
+
+    ## OBJECTIVE ##
+
+    # Define the objective function
+    if (penalization_factor <= 0)
+        @objective(model, Min,
+            sum(distances[(i,j)]*x[i,j] for (i,j) in keys(distances)))
     else
+        @objective(model, Min,
+            sum(distances[(i,j)]*x[i,j] for (i,j) in keys(distances))
+            - penalization_factor*avg_distance*sum(
+            x[i,j] for (i,j) in keys(distances) if i in non_visited_I))
+    end
 
-        # Case 2.1: if there is no feasible customer, even after recharging,
-        # which we can know thanks to second_chance_customers,
-        # then set next node to end depot
-        if (isempty(second_chance_customers))
-            next_node = n_total
 
-        # Case 2.2: if there may be feasible customers after recharging
-        else
+    ## SOLVING ##
 
-            # Compute neighboring stations
-            neighbor_stations = intersect(stations, neighbors_out[i])
+    # Run the solving process
+    optimize!(model)
 
-            # Case 2.1.1: if there is no neighboring station
-            # then set next node to end depot
-            if (isempty(neighbor_stations))
-                next_node = n_total
 
-            # Case 2.1.2: if there are neighboring stations
-            else
+    ## RESULTS ##
 
-                check_feasible_station = false
-                while (!isempty(neighbor_stations) && !check_feasible_station)
+    # Get solution
+    x_star = value.(x)
 
-                    # Get one station
-                    station = pop!(neighbor_stations)
+    # Compute elements of the route and distance of the route
+    path = convert_arcs_into_path(x_star, n_tot)
+    distance = sum(distances[(i,j)]*x_star[i,j] for (i,j) in keys(distances))
 
-                    # Compute leaving time from recharging station
-                    arriving_t_station = max(es[station], t)
-                    delta_y_station = Q - y
-                    leaving_t_station = arriving_t_station + g*delta_y_station
+    # Output
+    path, distance
 
-                    # Compute feasible customers from recharging station
-                    js = get_feasible_customers(station, leaving_t_station, Q,
-                        second_chance_customers,
-                        n_total, r, g, Q, es, ls,
-                        stations, neighbors_out, times, distances)
+end
 
-                    ## ** WIP!!! **
 
-                    # If there are no feasible customers,
-                    # Set next node to end depot
-                    if (isempty(js))
-                        next_node = n_total
 
-                    # Otherwise,
-                    # Set next node to recharging station
-                    else
-                        next_node = station
-                    end
+###############
+## HEURISTIC ##
+###############
+
+
+function run_heuristic(penalization_factor,
+    n, m, r, g, Q, es, ls, I, F,
+    neighbours_in, neighbours_out, distances, times,
+    display_process)
+
+    # Compute average distance
+    avg_distance = 0
+    for (i,j) in keys(distances)
+        avg_distance += distances[(i,j)]
+    end
+    avg_distance = avg_distance/m
+
+    # Initialize variables storing results with any initial values
+    total_distance = 0
+    nb_routes = 0
+    routes = []
+
+    # Initialize non-visited set
+    non_visited_I = deepcopy(I)
+    must_be_visited_I = Set{Int}()
+
+    # Loop while reduced is negative
+    if display_process
+        while !(isempty(non_visited_I))
+            nb_routes += 1
+            best_ratio = Inf
+            best_distance = Inf
+            best_path = []
+            println("- ROUTE ", nb_routes)
+            println("Generating and finding next best route")
+            for i in non_visited_I
+                must_be_visited_I = Set{Int}(i)
+                path, distance = generate_route(must_be_visited_I,
+                    non_visited_I, avg_distance, penalization_factor,
+                    n, r, g, Q, es, ls, I, F,
+                    neighbours_in, neighbours_out, distances, times)
+                nb_newly_visited = length(intersect(non_visited_I, path))
+                ratio = distance/nb_newly_visited
+                if ratio < best_ratio
+                    best_ratio = ratio
+                    best_distance = distance
+                    best_path = path
                 end
             end
+            println("Done")
+            println("Route: ", best_path)
+            println("Route distance: ", best_distance, "\n")
+            total_distance += best_distance
+            non_visited_I = setdiff(non_visited_I, best_path)
+            push!(routes, best_path)
         end
-    end
-
-    # Output
-    next_node
-
-end
-
-
-    #########################
-    ## SELECTION FUNCTIONS ##
-    #########################
-
-function select_closest(i, feasible_customers, distances)
-
-    # Initialize variables
-    j_star = -1
-    d_star_ij = Inf
-
-    # Find the closest customer
-    for j in feasible_customers
-        d_ij = distances[(i,j)]
-        if (d_ij < d_star_ij)
-            j_star = j
-            d_star_ij = d_ij
-        end
-    end
-
-    # Output
-    j_star
-
-end
-
-
-# ** To do **
-# If positive demands
-function select_largest_ratio_distance_over_demand(
-    i, feasible_customers, distances)
-
-    # Initialiaze variables
-    j_star = -1
-    d_star_ij = Inf
-
-    # Find the largest ratio distance over demand
-    # ** To do **
-
-    # Output
-    j_star
-
-end
-
-
-
-
-######################
-## GREEDY HEURISTIC ##
-######################
-
-
-# Assumption : zero service time, zero demands
-function greedy_heuristic(file_name)
-
-    # Extract data
-    n_total, m, r, g, Q, es, ls, I, F,
-        neighbors_in, neighbors_out, distances, times =
-        extract_data(string(data_folder_path, file_name))
-
-    # Initialize sets of non-visited customers and stations
-    non_visited_customers = Set(I)
-    stations = Set(F)
-
-    # Initialize variables
-    nb_vehicules = 0
-    total_distance = 0
-
-    # While all customers have not been visited
-    while (!isempty(non_visited_customers))
-
-        # Initialiaze route
-        node = 1
-        time = es[node]
-        battery = Q
-
-        # While vehicule is not at the end depot
-        while (node != n_total)
-
-            # Compute feasible customers
-            feasible_customers, second_chance_customers =
-                get_feasible_customers(node, time, battery,
-                    non_visited_customers,
-                    n_total, r, g, Q, es, ls,
-                    stations, neighbors_out, times, distances)
-
-            # Initialize variable for next node
-            next_node = -1
-
-            # Case 1: there are feasible customers
-            if (!isempty(feasible_customers))
-                # Select best customer based on specified criterion
-                next_node =
-                    select_closest(node, feasible_customers, distances)
-                # Remove selected customer from non-visited node
-                setdiff!(non_visited_customers, next_node)
-
-            # Case 2 : there is no feasible customers
-            else
-                # Choose between going to the ending depot
-                # or going to a recharging station
-                next_node =
-                    choose_end_or_recharge(node, time, battery,
-                        second_chance_customers,
-                        n_total, r, g, Q, es, ls,
-                        stations, neighbors_out, times, distances)
+    else
+        while !(isempty(non_visited_I))
+            nb_routes += 1
+            best_ratio = Inf
+            best_distance = Inf
+            best_path = []
+            for i in non_visited_I
+                must_be_visited_I = Set{Int}(i)
+                path, distance = generate_route(must_be_visited_I,
+                    non_visited_I, avg_distance, penalization_factor,
+                    n, r, g, Q, es, ls, I, F,
+                    neighbours_in, neighbours_out, distances, times)
+                nb_newly_visited = length(intersect(non_visited_I, path))
+                ratio = distance/nb_newly_visited
+                if ratio < best_ratio
+                    best_ratio = ratio
+                    best_distance = distance
+                    best_path = path
+                end
             end
-
-            # Update time, battery and total distance
-            time = max(time + times[(node, next_node)], es[next_node])
-            distance = distances[(node, next_node)]
-            total_distance += distance
-            battery -= r*distance
-
-            # Update node and data structure
-            node = next_node
-
+            total_distance += best_distance
+            non_visited_I = setdiff(non_visited_I, best_path)
+            push!(routes, best_path)
         end
-
-        # Update variables
-        nb_vehicules += 1
-
     end
 
-    # Output results
-    println("Number of vehicules: ", nb_vehicules)
-    println("Total distance: ", total_distance)
+    # Output
+    total_distance, nb_routes, routes
 
 end
-
-
-
-
-##########
-## MAIN ##
-##########
-
-
-# Provide file_name (with extension)
-#file_name = "E_data.txt"
-file_name = "E_data_1.txt"
-
-# Run greedy heuristic
-greedy_heuristic(file_name)

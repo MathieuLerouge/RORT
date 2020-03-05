@@ -13,14 +13,8 @@ using GLPK
 #############
 
 
-# Set folder_path
-#folder_path = "/Users/camillegrange/Documents/RORT/"
-folder_path = "/Users/lerougemathieu/Documents/Courses/MPRO/RORT/Project/"
-
-# Prepare data extraction
-data_folder = "data/"
-data_folder_path = string(folder_path, data_folder)
-include(string(data_folder_path, "data_extraction.jl"))
+# Include file about routes implementation
+include("routes_implementation.jl")
 
 
 
@@ -29,7 +23,9 @@ include(string(data_folder_path, "data_extraction.jl"))
 ################
 
 
-function solve_subproblem(dual_values)
+function solve_subproblem(dual_values,
+    n, r, g, Q, es, ls, I, F,
+    neighbours_in, neighbours_out, distances, times, s, q, C)
 
     ## MODEL ##
 
@@ -90,7 +86,8 @@ function solve_subproblem(dual_values)
     # Define the objective function
     @objective(model, Min,
         sum(distances[(i,j)]*x[i,j] for (i,j) in keys(distances))
-        - sum(dual_values[i]*x[i,j] for i in I for j in 2:n+2 if (i,j) in keys(distances)))
+        - sum(dual_values[i]*x[i,j] for i in I for j in 2:n+2
+            if (i,j) in keys(distances)))
 
 
     ## SOLVING ##
@@ -108,31 +105,6 @@ function solve_subproblem(dual_values)
     # Output
     x_star, reduced_cost
 
-end
-
-# Deprecated
-# function display_route(route, n_tot)
-#     for i in 1:n_tot
-#         println(route[i, :])
-#     end
-# end
-
-function convert_route_into_path(route, n_tot)
-    path = [1]
-    i = 1
-    while i != n_tot
-        j = 2
-        while route[i, j] != 1
-            j += 1
-        end
-        i = j
-        push!(path, i)
-    end
-    path
-end
-
-function display_route_as_path(route, n_tot)
-    println(convert_route_into_path(route, n_tot))
 end
 
 
@@ -360,7 +332,9 @@ function run_column_generation(routes, display_process)
             dual_values = solve_relaxed_master(routes, n, I, distances)
             println("Done")
             println("3. Running subproblem")
-            new_route, reduced_cost = solve_subproblem(dual_values)
+            new_route, reduced_cost = solve_subproblem(dual_values,
+                n, r, g, Q, es, ls, I, F,
+                neighbours_in, neighbours_out, distances, times, s, q, C)
             println("Done")
             println("Reduced cost: ", reduced_cost, "\n")
             push!(routes, new_route)
@@ -371,7 +345,9 @@ function run_column_generation(routes, display_process)
             total_distance, nb_routes, routes_selection =
                 solve_master(routes, n, I, distances)
             dual_values = solve_relaxed_master(routes, n, I, distances)
-            new_route, reduced_cost = solve_subproblem(dual_values)
+            new_route, reduced_cost = solve_subproblem(dual_values,
+                n, r, g, Q, es, ls, I, F,
+                neighbours_in, neighbours_out, distances, times, s, q, C)
             push!(routes, new_route)
             new_routes_counter += 1
         end
@@ -379,221 +355,5 @@ function run_column_generation(routes, display_process)
 
     # Output
     total_distance, nb_routes, new_routes_counter
-
-end
-
-
-
-##########
-## MAIN ##
-##########
-
-
-## VARIABLES TO SET ##
-
-# Set boolean for measuring running time
-#measuring_time = true
-measuring_time = false
-
-# Set boolean for simplifying the graph of connections
-# by removing unfeasible arcs
-simplifying_graph = true
-#simplifying_graph = false
-
-# Set file_name
-#file_name = "E_data.txt"
-#file_name = "E_data_1.txt"
-#file_name = "E_data_2.txt"
-file_name = "E_data_3.txt"
-
-
-## OTHER VARIABLES ##
-
-# Define boolean for displaying details of the entire solving process
-# if and only if not measuring running time
-display_process = !measuring_time
-
-
-## DATA EXTRACTION ##
-
-# Display
-println("\n",
-    "---------------\n",
-    "DATA EXTRACTION\n",
-    "---------------\n")
-
-# Compile code if measuring time
-# Basically, run functions once so that they are all compiled
-if measuring_time
-    n_tot, m, r, g, Q, es, ls, I, F, neighbours_in, neighbours_out,
-        distances, times = extract_data(string(data_folder_path, file_name))
-    n = n_tot - 2
-    _ = clear_graph(n, m, r, g, Q, es, ls, I, F,
-        neighbours_in, neighbours_out, distances, times, s, q, C)
-end
-
-# Extract data
-data_extraction_time = @elapsed n_tot, m, r, g, Q, es, ls, I, F,
-    neighbours_in, neighbours_out, distances, times =
-        extract_data(string(data_folder_path, file_name))
-n = n_tot - 2
-
-# Complete data
-# Assumption: no time service
-s = [0 for i in 1:n_tot]
-# Assumption: no demand to deliver
-q = [0 for i in 1:n_tot]
-# Assumption: infinite capacity of vehicules
-C = 100000
-
-# Delete unfeasible arcs
-nb_deleted_arcs = 0
-graph_simplification_time = 0
-if simplifying_graph
-    graph_simplification_time = @elapsed nb_deleted_arcs =
-        clear_graph(n, m, r, g, Q, es, ls, I, F,
-            neighbours_in, neighbours_out, distances, times, s, q, C)
-end
-
-# Display data
-if display_process
-    println("- DATA")
-    print("Indices of clients I: ")
-    for i in I
-        print(i, ",")
-    end
-    println("")
-    print("Indices of stations F: ")
-    for i in F
-        print(i, ",")
-    end
-    if simplifying_graph
-        println("\n")
-    else
-        println("")
-    end
-end
-
-# Display performances
-if simplifying_graph || measuring_time
-    println("- PERFORMANCES")
-    if measuring_time
-        println("Elapsed time to extract data: ", data_extraction_time, "s")
-    end
-    if simplifying_graph
-        println("Number of deleted unfeasible arcs: ", nb_deleted_arcs)
-        if measuring_time
-            println("Elapsed time to simplify graph: ",
-                graph_simplification_time, "s")
-        end
-    end
-end
-
-println("\n",
-    "----------------------\n",
-    "END OF DATA EXTRACTION\n",
-    "----------------------\n")
-
-
-## COLUMN GENERATION ##
-
-# Display
-println("\n",
-    "-----------------\n",
-    "COLUMN GENERATION\n",
-    "-----------------\n")
-
-# Compile code if measuring time
-# Basically, run functions once so that they are all compiled
-if measuring_time
-    _, _ = prepare_column_generation(n_tot, I,
-        neighbours_in, neighbours_out, deepcopy(distances), deepcopy(times))
-    _, _, _ = run_column_generation(routes, false)
-end
-
-# Prepare column generation
-# In particular, initialize a first set of routes
-initialization_time = @elapsed routes, added_arcs_counter =
-    prepare_column_generation(n_tot, I,
-        neighbours_in, neighbours_out, distances, times)
-println("- GRAPH ALTERATIONS")
-println("Number of infinite arcs added to the graph: ", added_arcs_counter)
-println("")
-
-# Display initial routes
-route_index = 1
-if display_process
-    println("- INITIALIZATION")
-    println("Number of initial routes: ", length(routes))
-    for route in routes
-        println("Initial route ", route_index, ":")
-        display_route_as_path(route, n_tot)
-        global route_index += 1
-    end
-    println("")
-end
-
-# Run column generation
-column_generation_time = @elapsed total_distance, nb_routes,
-    new_routes_counter = run_column_generation(routes, display_process)
-
-# Display results
-println("- OPTIMAL VALUES")
-println("Number of vehicules: ", nb_routes)
-println("Total distance: ", total_distance)
-println("")
-
-# Display performances
-println("- PERFORMANCES")
-println("Number of routes added / of subproblems solved: ", new_routes_counter)
-if measuring_time
-    println("Elapsed time to prepare column generation: ",
-        initialization_time, "s")
-    println("Elapsed time to run column generation: ",
-        column_generation_time, "s")
-end
-
-println("\n",
-    "------------------------\n",
-    "END OF COLUMN GENERATION\n",
-    "------------------------\n")
-
-
-
-## PERFORMANCES ##
-
-# Display
-if measuring_time
-
-    println("\n",
-        "-------\n",
-        "SUMMARY\n",
-        "-------\n")
-
-    println("- NUMBERS")
-    if simplifying_graph
-        println("Number of deleted unfeasible arcs: ", nb_deleted_arcs)
-    end
-    println("Number of infinite arcs added to the graph: ", added_arcs_counter)
-    println("Number of routes added / of subproblems solved: ", new_routes_counter)
-    println("")
-
-    println("- TIMES")
-    total_time = data_extraction_time + graph_simplification_time +
-        initialization_time + column_generation_time
-    println("Elapsed time to extract data: ", data_extraction_time, "s")
-    if simplifying_graph
-        println("Elapsed time to simplify graph: ", graph_simplification_time, "s")
-    end
-    println("Elapsed time to prepare column generation: ",
-        initialization_time, "s")
-    println("Elapsed time to run column generation: ",
-        column_generation_time, "s")
-    println("Elapsed total time: ", total_time)
-
-    println("\n",
-        "--------------\n",
-        "END OF SUMMARY\n",
-        "--------------\n")
 
 end
