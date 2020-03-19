@@ -38,13 +38,16 @@ simplifying_graph = true
 #file_name = "E_data.txt"
 #file_name = "E_data_1.txt"
 #file_name = "E_data_2.txt"
-file_name = "E_data_3.txt"
+#file_name = "E_data_3.txt"
+file_name = "instance_8.txt"
+#file_name = "instance_42.txt"
+#file_name = "instance_86.txt"
 
 # Set algorithm
 # - MILP: 1
 # - Column generation: 2
 # - Heuristic: 3
-algorithm_type = 3
+algorithm_type = 2
 
 ## OTHER VARIABLES ##
 
