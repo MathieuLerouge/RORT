@@ -18,7 +18,7 @@ function run_MILP(n, r, g, Q, es, ls, I, F_prime,
     ## MODEL ##
 
     # Define the model
-    model = Model(with_optimizer(GLPK.Optimizer))
+    model = Model(GLPK.Optimizer)
 
 
     ## DECISION VARIABLES ##
