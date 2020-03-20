@@ -13,8 +13,9 @@ using GLPK
 #############
 
 
-# Include file about routes implementation
+# Include files about routes implementation and dynamic programming
 include("routes_implementation.jl")
+include("dynamic_programming.jl")
 
 
 
@@ -23,14 +24,15 @@ include("routes_implementation.jl")
 ################
 
 
-function solve_subproblem(dual_values,
+# Function to solve the subproblem using a MILP formulation
+function solve_subproblem_with_MILP(dual_values,
     n, r, g, Q, es, ls, I, F,
     neighbours_in, neighbours_out, distances, times, s, q, C)
 
     ## MODEL ##
 
     # Define the model
-    model = Model(with_optimizer(GLPK.Optimizer))
+    model = Model(GLPK.Optimizer)
 
 
     ## DECISION VARIABLES ##
@@ -108,6 +110,65 @@ function solve_subproblem(dual_values,
 end
 
 
+# Function to solve the subproblem using dynamic programming
+# (shorest path with constraints)
+function solve_subproblem_with_DP(dual_values,
+    n, r, g, Q, es, ls, I, F,
+    neighbours_out, distances, times)
+
+    # Alter distances with dual values
+    altered_distances = Dict{Tuple{Int64,Int64},Float64}()
+    for key in keys(distances)
+        altered_distances[key] = distances[key]
+    end
+    for i in I
+        for j in neighbours_out[i]
+            altered_distances[(i,j)] -= dual_values[i]
+        end
+    end
+
+    # ** WIP **
+    #println("Altered distances: ", altered_distances)
+    #println("Times: ", times)
+
+    # Run shortest path with constraints
+    new_path, reduced_cost = run_constrained_shortest_path(n, r, g, Q, es, ls,
+        I, F, neighbours_out, altered_distances, times, distances)
+    new_route = convert_path_into_arcs(new_path, n+2)
+
+    # ** WIP **
+    # ** Does not work because of cycle **
+    println("New path :", new_path)
+
+    # Output
+    new_route, reduced_cost
+
+end
+
+
+function solve_subproblem(dual_values,
+    n, r, g, Q, es, ls, I, F,
+    neighbours_in, neighbours_out, distances, times, s, q, C)
+
+    # Solving with MILP
+    if (false)
+        new_route, reduced_cost = solve_subproblem_with_MILP(dual_values,
+            n, r, g, Q, es, ls, I, F,
+            neighbours_in, neighbours_out, distances, times, s, q, C)
+
+    # Solving with DP
+    else
+        new_route, reduced_cost = solve_subproblem_with_DP(dual_values,
+            n, r, g, Q, es, ls, I, F,
+            neighbours_out, distances, times)
+    end
+
+    # Output
+    new_route, reduced_cost
+
+end
+
+
 ####################
 ## MASTER PROBLEM ##
 ####################
@@ -124,7 +185,8 @@ function solve_master(routes, n, I, distances)
     ## MODEL ##
 
     # Define the model
-    model = Model(with_optimizer(GLPK.Optimizer))
+    #model = Model(with_optimizer(GLPK.Optimizer))
+    model = Model(GLPK.Optimizer)
 
 
     ## DECISION VARIABLES ##
@@ -186,7 +248,7 @@ function solve_relaxed_master(routes, n, I, distances)
     ## MODEL ##
 
     # Define the model
-    model = Model(with_optimizer(GLPK.Optimizer))
+    model = Model(GLPK.Optimizer)
 
 
     ## DECISION VARIABLES ##
