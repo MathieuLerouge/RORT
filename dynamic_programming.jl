@@ -95,59 +95,156 @@ function compute_sequential_update(i, i_is_a_station, delta_i, tags_j, e_j, l_j,
 
         # Check if the new time t_j fits in the time window
         # and if the charge y_j is positive
-        if (t_j <= l_j) && (y_j >= 0)
+        if (t_j <= l_j) #&& (y_j >= 0) # ** WIP **
 
-            # Set variable
+            # Set variables
+            must_insert_tag = false
             nb_tags_j = length(tags_j)
 
             # ** WIP **
             #println("Number of tags: ", nb_tags_j)
 
-            # Find the tag k, named key tag, of the successor j which has
-            # the smallest time t_j[k] that is superior to the new time t_j
+            # Find the tag k, named key tag, of the successor j which has the
+            # smallest time t_j[k] that is strictly superior to the new time t_j
+            # if such k exists
+            # (in general case, 1 < k <= nb_tags and
+            # k is such that t_j[k-1] <= t_j < t_j[k])
             k = 1
             while (k <= nb_tags_j) && (t_j >= tags_j[k].time)
                 k += 1
             end
 
-            # Border case:
-            # New time t_j is larger than any other time
-            if (k > nb_tags_j)
+            # Case 0:
+            # When 1 < k, new time t_j is equal to the time of tag k-1
+            # (i.e. when 1 < k <= nb_tags, t_j[k-1] = t_j < t_j[k])
+            if (k > 1) && (tags_j[k-1].time == t_j)
 
-                # And new distance d_j is smaller than the one of the tag
-                if (d_j < tags_j[nb_tags_j].distance)
+                # Case 0.a:
+                # New distance d_j is strictly smaller than
+                # the distance d_j[k-1] of tag k-1
+                # (i.e. t_j[k-1] = t_j and d_j[k-1] > d_j)
+                if (tags_j[k-1].distance > d_j)
 
-                    # Add the tag
+                    # Delete tag k-1
+                    deleteat!(tags_j, k-1)
+
+                    # Update
+                    k -= 1
+                    nb_tags_j -= 1
+
+                    # Flag the need to insert the new tag
+                    must_insert_tag = true
+
+                # Case b:
+                # New distance d_j is larger or equal to
+                # the distance d_j[k-1] of tag k-1
+                # (i.e. t_j[k-1] = t_j and d_j[k-1] <= d_j)
+                else
+
+                    # Skip the new tag
+                    continue
+
+                end
+            end
+
+            # From here, 1 <= k <= nb_tags + 1
+            # and if 1 < k <= nb_tags then t_j[k-1] < t_j < t_j[k]
+
+            # Case 1:
+            # There is no tag at node j
+            if (nb_tags_j == 0)
+
+                # Add the new tag
+                push!(tags_j, new_tag_j)
+
+                # Save the change
+                push!(delta_j, new_tag_j)
+
+                # Flag no need to insert the new tag
+                must_insert_tag = false
+
+            # Case 2:
+            # New time t_j is strictly larger than any other time but
+            # (i.e. t_j[-1] < t_j)
+            elseif (nb_tags_j < k)
+
+                # Case 2.a:
+                # New distance d_j is strictly smaller than
+                # the distance of the last tag
+                # (i.e. t_j[-1] < t_j and d_j[-1] > d_j)
+                if (tags_j[nb_tags_j].distance > d_j)
+
+                    # Add the new tag
                     push!(tags_j, new_tag_j)
 
                     # Save the change
                     push!(delta_j, new_tag_j)
 
+                    # Flag no need to insert the new tag
+                    must_insert_tag = false
+
+                # Case 2.b:
+                # New distance d_j is larger or equal to
+                # the distance of the last tag
+                # (i.e. t_j[-1] < t_j and d_j[-1] <= d_j)
+                else
+
+                    # Skip the new tag
+                    continue
+
                 end
 
-            # Case 1:
+            # From here, 1 <= k <= nb_tags
+            # - if k = 1 then t_j < t_j[1]
+            # - if 1 < k <= nb_tags then t_j[k-1] < t_j < t_j[k]
+
+            # Case 3:
             # New distance d_j is smaller than the one of the key tag d_j[k]
-            # (i.e. new tag < key tag)
-            elseif (d_j < tags_j[k].distance)
+            # (i.e. t_j[k-1] < t_j < t_j[k] and d_j <= d_j[k])
+            elseif (d_j <= tags_j[k].distance)
 
                 # Remove any tag which has a larger time and a larger distance
-                # (i.e. tags that satisfies new tag < tag)
-                while (k <= nb_tags_j) && (d_j < tags_j[k].distance)
+                while (k <= nb_tags_j) && (d_j <= tags_j[k].distance)
                     deleteat!(tags_j, k)
                     nb_tags_j -= 1
                 end
 
-                # Insert tag at the right location
-                insert!(tags_j, k, new_tag_j)
+                # Border effect
+                if (nb_tags_j == 0)
 
-                # Save the change
-                push!(delta_j, new_tag_j)
+                    # Add the new tag
+                    push!(tags_j, new_tag_j)
 
-            # Case 2:
+                    # Save the change
+                    push!(delta_j, new_tag_j)
+
+                    # Flag no need to insert the new tag
+                    must_insert_tag = false
+
+                else
+
+                    # Flag the need to insert the new tag
+                    must_insert_tag = true
+
+                end
+
+            # From here, 1 <= k <= nb_tags
+            # - if k = 1 then t_j < t_j[1] and d_j > d_j[1]
+            # - if 1 < k <= nb_tags then t_j[k-1] < t_j < t_j[k] and d_j > d_j[k]
+
+            # Case 4:
             # New distance d_j is not smaller than the one of the key tag d_j[k]
-            # and is smaller than the one of the tag before
-            elseif (d_j > tags_j[k].distance) &&
-                (k > 1) && (d_j < tags_j[k-1].distance)
+            # but is smaller than the one of the tag before
+            # (i.e. t_j[k-1] < t_j < t_j[k] and d_j[k-1] > d_j > d_j[k])
+            elseif (k == 1) || ((k > 1) && (tags_j[k-1].distance) > d_j)
+
+                # Flag the need to insert the new tag
+                must_insert_tag = true
+
+            end
+
+            # If the need to insert has been raised
+            if must_insert_tag
 
                 # Insert tag at the right location
                 insert!(tags_j, k, new_tag_j)
