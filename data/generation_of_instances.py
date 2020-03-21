@@ -59,7 +59,7 @@ for i in range(n_tot):
 
 
 mon_fichier = open(r"C:\Users\math-\OneDrive\Documents\Courses\MPRO\RORT\RORT\data\instance1.txt",'w')
-chaine="%i "%n
+chaine="%i "%n_tot
 mon_fichier.write(chaine)
 chaine="%i "%(n_tot**2 - n_tot)
 mon_fichier.write(chaine)
