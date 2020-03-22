@@ -148,68 +148,122 @@ function run_heuristic(penalization_factor,
     total_distance = 0
     nb_routes = 0
     routes = []
+    nb_milps = 0
 
     # Initialize non-visited set
     non_visited_I = deepcopy(I)
     must_be_visited_I = Set{Int}()
 
-    # Loop while reduced is negative
-    if display_process
+    # Case 1:
+    # Objective function for the generation of new route is the shortest path
+    # and routes are selected based on ratios
+    if penalization_factor <= 0
+
+        # Generate shortest path visiting one specific client for each client
+        # and initialize arrays
+        ratios = zeros(Float64, n+2)
+        routes_distances = zeros(Float64, n+2)
+        pathes = [[] for _ in 1:n_tot]
+        if display_process
+            println("Generating one route per client")
+        end
+        for i in I
+            must_be_visited_I = Set{Int}(i)
+            path, distance = generate_route(must_be_visited_I,
+                non_visited_I, avg_distance, penalization_factor,
+                n, r, g, Q, es, ls, I, F,
+                neighbours_in, neighbours_out, distances, times)
+            nb_newly_visited = length(intersect(non_visited_I, path))
+            ratios[i] = distance/nb_newly_visited
+            routes_distances[i] = distance
+            pathes[i] = path
+            nb_milps += 1
+        end
+
+        # Loop while all customers are not visited
         while !(isempty(non_visited_I))
             nb_routes += 1
             best_ratio = Inf
             best_distance = Inf
             best_path = []
-            println("- ROUTE ", nb_routes)
-            println("Generating and finding next best route")
+            if display_process
+                println("Finding next best route")
+            end
             for i in non_visited_I
-                must_be_visited_I = Set{Int}(i)
-                path, distance = generate_route(must_be_visited_I,
-                    non_visited_I, avg_distance, penalization_factor,
-                    n, r, g, Q, es, ls, I, F,
-                    neighbours_in, neighbours_out, distances, times)
-                nb_newly_visited = length(intersect(non_visited_I, path))
-                ratio = distance/nb_newly_visited
-                if ratio < best_ratio
-                    best_ratio = ratio
-                    best_distance = distance
-                    best_path = path
+                if ratios[i] < best_ratio
+                    best_ratio = ratios[i]
+                    best_distance = routes_distances[i]
+                    best_path = pathes[i]
                 end
             end
-            println("Done")
-            println("Route: ", best_path)
-            println("Route distance: ", best_distance, "\n")
+            if display_process
+                println("Done")
+                println("- ROUTE ", nb_routes)
+                println("Route: ", best_path)
+                println("Route distance: ", best_distance, "\n")
+            end
             total_distance += best_distance
             non_visited_I = setdiff(non_visited_I, best_path)
             push!(routes, best_path)
         end
+
+    # Case 2:
+    # Objective function for the generation of new route is a compromise
+    # between shortest path and number of new visited customers
     else
-        while !(isempty(non_visited_I))
-            nb_routes += 1
-            best_ratio = Inf
-            best_distance = Inf
-            best_path = []
-            for i in non_visited_I
-                must_be_visited_I = Set{Int}(i)
-                path, distance = generate_route(must_be_visited_I,
-                    non_visited_I, avg_distance, penalization_factor,
-                    n, r, g, Q, es, ls, I, F,
-                    neighbours_in, neighbours_out, distances, times)
-                nb_newly_visited = length(intersect(non_visited_I, path))
-                ratio = distance/nb_newly_visited
-                if ratio < best_ratio
-                    best_ratio = ratio
-                    best_distance = distance
-                    best_path = path
+        if display_process
+        # Loop while all customers are not visited
+            while !(isempty(non_visited_I))
+                nb_routes += 1
+                best_distance = Inf
+                best_path = []
+                println("- ROUTE ", nb_routes)
+                println("Generating and finding next best route")
+                for i in non_visited_I
+                    must_be_visited_I = Set{Int}(i)
+                    path, distance = generate_route(must_be_visited_I,
+                        non_visited_I, avg_distance, penalization_factor,
+                        n, r, g, Q, es, ls, I, F,
+                        neighbours_in, neighbours_out, distances, times)
+                    if distance < best_distance
+                        best_distance = distance
+                        best_path = path
+                    end
+                    nb_milps += 1
                 end
+                println("Done")
+                println("Route: ", best_path)
+                println("Route distance: ", best_distance, "\n")
+                total_distance += best_distance
+                non_visited_I = setdiff(non_visited_I, best_path)
+                push!(routes, best_path)
             end
-            total_distance += best_distance
-            non_visited_I = setdiff(non_visited_I, best_path)
-            push!(routes, best_path)
+        else
+            while !(isempty(non_visited_I))
+                nb_routes += 1
+                best_distance = Inf
+                best_path = []
+                for i in non_visited_I
+                    must_be_visited_I = Set{Int}(i)
+                    path, distance = generate_route(must_be_visited_I,
+                        non_visited_I, avg_distance, penalization_factor,
+                        n, r, g, Q, es, ls, I, F,
+                        neighbours_in, neighbours_out, distances, times)
+                    nb_newly_visited = length(intersect(non_visited_I, path))
+                    if distance < best_distance
+                        best_distance = distance
+                        best_path = path
+                    end
+                    nb_milps += 1
+                end
+                total_distance += best_distance
+                non_visited_I = setdiff(non_visited_I, best_path)
+                push!(routes, best_path)
+            end
         end
     end
 
     # Output
-    total_distance, nb_routes, routes
+    total_distance, nb_routes, routes, nb_milps
 
 end
