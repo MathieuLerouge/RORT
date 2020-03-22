@@ -34,7 +34,7 @@ function generate_route(must_be_visited_I,
     ## MODEL ##
 
     # Define the model
-    model = Model(with_optimizer(GLPK.Optimizer))
+    model = Model(GLPK.Optimizer)
 
 
     ## DECISION VARIABLES ##
@@ -66,9 +66,11 @@ function generate_route(must_be_visited_I,
         tau[i]+(times[(i,j)] + s[i])*x[i,j] - ls[1]*(1-x[i,j]) <= tau[j])
 
     # Time feasability when leaving recharging stations (6)
-    @constraint(model, cst_6[i in F, j in 2:n+2; (i,j) in keys(distances)],
-        tau[i]+times[(i,j)]*x[i,j] + g*(Q-y[i]) - (ls[1] + g*Q)*(1-x[i,j])
-        <= tau[j])
+    if (!isempty(F))
+        @constraint(model, cst_6[i in F, j in 2:n+2; (i,j) in keys(distances)],
+            tau[i]+times[(i,j)]*x[i,j] + g*(Q-y[i]) - (ls[1] + g*Q)*(1-x[i,j])
+            <= tau[j])
+    end
 
     # Time windows (7)
     @constraint(model, cst_7[j in 1:n+2], es[j] <= tau[j])

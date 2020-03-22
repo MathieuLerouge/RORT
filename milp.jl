@@ -53,9 +53,12 @@ function run_MILP(n, r, g, Q, es, ls, I, F_prime,
         tau[i]+(times[(i,j)] + s[i])*x[i,j] - ls[1]*(1-x[i,j]) <= tau[j])
 
     # - Time feasability when leaving recharging stations (6)
-    @constraint(model, ct_6[i in F_prime, j in 2:n+2;
-        (i,j) in keys(distances)],
-        tau[i]+times[(i,j)]*x[i,j] + g*(Q-y[i]) - (ls[1] + g*Q)*(1-x[i,j]) <= tau[j])
+    if (!isempty(F_prime))
+        @constraint(model, ct_6[i in F_prime, j in 2:n+2;
+            (i,j) in keys(distances)],
+            tau[i]+times[(i,j)]*x[i,j] + g*(Q-y[i]) - (ls[1] + g*Q)*(1-x[i,j])
+            <= tau[j])
+    end
 
     # - Time windows (7)
     @constraint(model, ct_7[j in 1:n+2], es[j] <= tau[j])
