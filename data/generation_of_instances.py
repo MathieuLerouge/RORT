@@ -3,8 +3,7 @@ import math
 
 #Nombre de clients
 n = 10
-#Nombre d'arcs
-#nb_arcs = 1
+#Temps de la fenêtre maximale
 tps_max = 30
 
 r = 0.5
@@ -20,14 +19,10 @@ clients = []
 for i in range (n) :
     clients.append([randrange(taille_grille), randrange(taille_grille)])
 
-print(clients)
-
 stations = []
 for i in range (nb_divisions):
     for j in range (nb_divisions):
         stations.append([ratio*i + randrange(ratio), ratio*j + randrange(ratio)])
-
-print(stations)
 
 sommets = clients + stations
 
@@ -38,30 +33,44 @@ for i in range (nb_divisions**2):
 for i in range (n):
     temps_clients.append([0, tps_max])
 
-arcs = [[0]*n_tot]*n_tot
+#Le graphe est complet, à l'exception :
+# - des arcs (_,1) i.e aucun arcs n'arrive au dépôt de départ
+# - des arcs (n,_) i.e aucun arcs ne part du dépôt d'arrivée
+# - des arcs (i,i) pour tout sommet i, i.e pas de boucle
+arcs = []
+m = 0 #compte nombre d'arcs
 for i in range(n_tot):
+    arcs_i = []
     for j in range(n_tot):
-        if i != j :
-            arcs[i][j] = 1
+        if j != i and j!= 0 and i!= n-1:
+            arcs_i.append(1)
+            m += 1
+        else :
+            arcs_i.append(0)
+    arcs.append(arcs_i)
 
-poids = [[0]*n_tot]*n_tot
+poids = []
 for i in range(n_tot):
+    poids_i = []
     for j in range(n_tot):
-        poids[i][j] = 1
+            poids_i.append(1)
+    poids.append(poids_i)
 
-distances = [[0]*n_tot]*n_tot
+distances = []
 for i in range(n_tot):
+    dist_i = []
     for j in range(n_tot):
         if arcs[i][j] == 1 :
-            distances[i][j] = math.sqrt((sommets[i][0] - sommets[j][0])**2 + (sommets[i][1] - sommets[j][1])**2)
-
-
+            dist_i.append(math.sqrt((sommets[i][0] - sommets[j][0])**2 + (sommets[i][1] - sommets[j][1])**2))
+        else :
+            dist_i.append(0)
+    distances.append(dist_i)
 
 
 mon_fichier = open(r"C:\Users\math-\OneDrive\Documents\Courses\MPRO\RORT\RORT\data\instance1.txt",'w')
 chaine="%i "%n_tot
 mon_fichier.write(chaine)
-chaine="%i "%(n_tot**2 - n_tot)
+chaine="%i "%m
 mon_fichier.write(chaine)
 chaine="%f "%r
 mon_fichier.write(chaine)
