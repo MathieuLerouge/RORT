@@ -49,14 +49,14 @@ file_name = "E_data_1.txt"
 # - MILP: 1
 # - Column generation: 2
 # - Heuristic: 3
-algorithm_type = 1
+algorithm_type = 2
 
 # Set number of duplicates for MILP
-nb_duplicates = 2
+nb_duplicates = 0
 
 # Set factor of compromise between shortest path and visit of new customers
 # for heuristic
-penalization_factor = 3
+penalization_factor = -1
 
 ## OTHER VARIABLES ##
 
