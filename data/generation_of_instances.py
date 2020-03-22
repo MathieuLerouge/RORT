@@ -35,14 +35,14 @@ for i in range (n):
 
 #Le graphe est complet, à l'exception :
 # - des arcs (_,1) i.e aucun arcs n'arrive au dépôt de départ
-# - des arcs (n,_) i.e aucun arcs ne part du dépôt d'arrivée
+# - des arcs (n_tot,_) i.e aucun arcs ne part du dépôt d'arrivée
 # - des arcs (i,i) pour tout sommet i, i.e pas de boucle
 arcs = []
 m = 0 #compte nombre d'arcs
 for i in range(n_tot):
     arcs_i = []
     for j in range(n_tot):
-        if j != i and j!= 0 and i!= n-1:
+        if j != i and j!= 0 and i!= n_tot-1:
             arcs_i.append(1)
             m += 1
         else :
