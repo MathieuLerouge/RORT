@@ -14,7 +14,7 @@ using DataStructures
 
 # Set global variables
 start_depot_index = 1
-tolerance = 1e-6
+tolerance = 0.000001
 
 # Define a structure
 struct Tag
@@ -88,11 +88,6 @@ function compute_sequential_update(i, i_is_a_station, delta_i, tags_j, e_j, l_j,
         d_j = d_i + d_ij
         new_tag_j = Tag(t_j, d_j, y_j, i)
 
-        # ** WIP **
-        #println("From distance: ", d_i)
-        #println("In between distance: ", d_ij)
-        #println("End distance: ", d_j)
-
         # Check if the new time t_j fits in the time window
         # and if the charge y_j is positive
         if (t_j <= l_j) #&& (y_j >= 0) # ** WIP **
@@ -100,9 +95,6 @@ function compute_sequential_update(i, i_is_a_station, delta_i, tags_j, e_j, l_j,
             # Set variables
             must_insert_tag = false
             nb_tags_j = length(tags_j)
-
-            # ** WIP **
-            #println("Number of tags: ", nb_tags_j)
 
             # Find the tag k, named key tag, of the successor j which has the
             # smallest time t_j[k] that is strictly superior to the new time t_j
@@ -257,7 +249,6 @@ function compute_sequential_update(i, i_is_a_station, delta_i, tags_j, e_j, l_j,
     end
 
     # ** WIP **
-    #println("Tags: ", tags_j)
 
     # Output updated tags of the successor j
     tags_j, delta_j
@@ -276,24 +267,14 @@ function compute_successors_new_tags(index_i, i_is_a_station, delta_i,
     modified_successors_tags = []
     modified_successors_incr_deltas = []
 
-    # ** WIP **
-    #println("Successors: ", successors_js)
-
     # Update each successor's tags
     for j in 1:length(successors_js)
-
-        # ** WIP **
-        #println("Successor index: ", successors_js[j])
-        #println("Successor tags: ", successors_tags[j])
 
         # Compute updated tags of successor j
         tags_j, delta_j = compute_sequential_update(index_i, i_is_a_station,
             delta_i, successors_tags[j], successors_es[j], successors_ls[j],
             successors_distances[j], successors_times[j], successors_costs[j],
             r, g, Q)
-
-        # ** WIP **
-        #println("Updated successor tags: ", successors_tags[j])
 
         # If there are changes due to the update
         # then save the changes
@@ -315,16 +296,8 @@ end
 function add_to_nodes_exploration_queue(nodes_exploration_queue,
     modified_successors_js, sorting_keys)
 
-    # ** WIP **
-    #println("Keys: ", sorting_keys)
-    #println("Successors: ", modified_successors_js)
-    #println("Keys, successors: ", collect(zip(sorting_keys, modified_successors_js)))
-
     # Sort modified successors by keys
     sorted_pairs = sort(collect(zip(sorting_keys, modified_successors_js)))
-
-    # ** WIP **
-    #println("Sorted keys, successors: ", sorted_pairs)
 
     # Add the successors to the exploration queue
     for pair in sorted_pairs
@@ -377,9 +350,6 @@ function run_constrained_shortest_path(n, r, g, Q, es, ls, I, F,
     # Explore and update tags
     while !(isempty(nodes_exploration_queue))
 
-        # ** WIP **
-        #println("Exploration queue: ", nodes_exploration_queue)
-
         # Select a node and get data about its successors
         current_node = dequeue!(nodes_exploration_queue)
         current_node_is_a_station = (current_node in F)
@@ -398,9 +368,6 @@ function run_constrained_shortest_path(n, r, g, Q, es, ls, I, F,
             push!(successors_times, times[(current_node,j)])
             push!(successors_costs, costs[(current_node,j)])
         end
-
-        # ** WIP **
-        #println("Current node: ", current_node)
 
         # Update tags and deltas of modified successors
         modified_successors_js, modified_successors_tags,
@@ -428,9 +395,6 @@ function run_constrained_shortest_path(n, r, g, Q, es, ls, I, F,
 
     end
 
-    # ** WIP **
-    #println("Number of end tags: ", length(nodes_tags[n_tot]))
-
     # Get shortest distance
     shortest_distance = Inf
     best_tag_index = 0
@@ -441,9 +405,6 @@ function run_constrained_shortest_path(n, r, g, Q, es, ls, I, F,
             best_tag_index = k
         end
     end
-
-    # ** WIP **
-    #println("Best end tag: ", nodes_tags[n_tot][best_tag_index])
 
     # Get shortest path
     shortest_path = [n_tot]
@@ -462,9 +423,6 @@ function run_constrained_shortest_path(n, r, g, Q, es, ls, I, F,
         pushfirst!(shortest_path, node)
     end
     pushfirst!(shortest_path, predecessor)
-
-    # ** WIP **
-    #println("Shortest path: ", shortest_path)
 
     # Output
     shortest_path, shortest_distance
