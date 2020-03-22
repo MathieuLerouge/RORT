@@ -26,8 +26,8 @@ include("heuristic.jl")
 ## VARIABLES TO SET ##
 
 # Set boolean for measuring running time
-measuring_time = true
-#measuring_time = false
+#measuring_time = true
+measuring_time = false
 
 # Set boolean for simplifying the graph of connections
 # by removing unfeasible arcs
@@ -35,19 +35,28 @@ simplifying_graph = true
 #simplifying_graph = false
 
 # Set file_name
-file_name = "E_data.txt"
-#file_name = "E_data_1.txt"
+#file_name = "E_data.txt"
+file_name = "E_data_1.txt"
 #file_name = "E_data_2.txt"
 #file_name = "E_data_3.txt"
 #file_name = "instance_8.txt"
+#file_name = "instance_10.txt"
+#file_name = "instance_12.txt"
+#file_name = "instance_16.txt"
 #file_name = "instance_42.txt"
-#file_name = "instance_86.txt"
 
 # Set algorithm
 # - MILP: 1
 # - Column generation: 2
 # - Heuristic: 3
 algorithm_type = 1
+
+# Set number of duplicates for MILP
+nb_duplicates = 2
+
+# Set factor of compromise between shortest path and visit of new customers
+# for heuristic
+penalization_factor = 3
 
 ## OTHER VARIABLES ##
 
@@ -74,18 +83,15 @@ println("\n",
 # Basically, run functions once so that they are all compiled
 if measuring_time
     _, _, _, _, _, _, _, _, _, _, _, _, _ =
-        extract_data(string(data_folder_path, file_name))
+        extract_data(string(data_folder_path, file_name), nb_duplicates)
 end
 
 # Extract data
 data_extraction_time = @elapsed n_tot, m, r, g, Q, es, ls, I, F,
     neighbours_in, neighbours_out, distances, times =
-        extract_data(string(data_folder_path, file_name))
+        extract_data(string(data_folder_path, file_name), nb_duplicates)
 n = n_tot - 2
 total_time += data_extraction_time
-
-# ** WIP **
-F_prime = F
 
 # Complete data
 # Assumption: no time service
@@ -171,6 +177,7 @@ println("\n",
     "----\n")
 
 # Run MILP
+F_prime = F
 total_distance, nb_vehicules, milp_solving_time = run_MILP(n, r, g, Q, es, ls,
     I, F_prime, neighbours_in, neighbours_out, distances, times, s, q, C)
 total_time += milp_solving_time
@@ -277,10 +284,11 @@ end
 ## HEURISTIC ##
 ###############
 
-if algorithm_type==3
+# Initialize time and performances variables
+heuristic_time = 0
+nb_milps = 0
 
-# ** WIP **
-penalization_factor = -1
+if algorithm_type==3
 
 # Display
 println("\n",
@@ -289,10 +297,12 @@ println("\n",
     "---------\n")
 
 # Run heuristic
-total_distance, nb_routes, routes = run_heuristic(penalization_factor,
-    n, m, r, g, Q, es, ls, I, F,
-    neighbours_in, neighbours_out, distances, times,
-    display_process)
+heuristic_time = @elapsed total_distance, nb_routes, routes,
+    nb_milps = run_heuristic(penalization_factor,
+        n, m, r, g, Q, es, ls, I, F,
+        neighbours_in, neighbours_out, distances, times,
+        display_process)
+total_time += heuristic_time
 
 # Display results
 println("- OPTIMAL VALUES")
@@ -300,6 +310,12 @@ println("Number of vehicules: ", nb_routes)
 println("Total distance: ", total_distance)
 println("")
 
+# Display performances
+println("- PERFORMANCES")
+println("Number of MILPS solved: ", nb_milps)
+if measuring_time
+    println("Elapsed time to run heuristic: ", heuristic_time, "s")
+end
 
 # Display
 println("\n",
@@ -333,6 +349,9 @@ if measuring_time
             added_arcs_counter)
         println("Number of routes added / of subproblems solved: ",
             new_routes_counter)
+    elseif algorithm_type == 3
+        println("Elapsed time to run heuristic: ",
+            heuristic_time, "s")
     end
     println("")
 
@@ -348,6 +367,8 @@ if measuring_time
             initialization_time, "s")
         println("Elapsed time to run column generation: ",
             column_generation_time, "s")
+    elseif algorithm_type == 3
+        println("Elapsed time to run heuristic: ", heuristic_time, "s")
     end
     println("Elapsed total time: ", total_time)
 

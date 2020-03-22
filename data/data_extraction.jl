@@ -6,7 +6,7 @@
 
 # Function which extracts data from a data file
 # file_path must be a string which contains the extension
-function extract_data(file_path)
+function extract_data(file_path, nb_duplicates)
 
     # Open the text file and read lines
     f = open(file_path)
@@ -64,6 +64,88 @@ function extract_data(file_path)
 
     # Close the text file
     close(f)
+
+    # If we need to dupicate stations
+    if nb_duplicates >= 1
+
+        # Put away end depot
+        m_prime = m
+        end_e = es[n_tot]
+        end_l = ls[n_tot]
+        end_neighbors_in = neighbors_in[n_tot]
+        deleteat!(es, n_tot)
+        deleteat!(ls, n_tot)
+        deleteat!(neighbors_in, n_tot)
+        to_end_distances = Dict{Tuple{Int64,Int64},Int64}()
+        to_end_times = Dict{Tuple{Int64,Int64},Int64}()
+        for i in end_neighbors_in
+            neighbors_out[i] = setdiff(neighbors_out[i], n_tot)
+            to_end_distances[(i, n_tot)] = distances[(i, n_tot)]
+            to_end_times[(i, n_tot)] = times[(i, n_tot)]
+            delete!(distances, (i, n_tot))
+            delete!(times, (i, n_tot))
+            m_prime -= 1
+        end
+
+        # Add duplicates
+        n_prime = n_tot-1
+        F_prime = copy(F)
+        duplicates = Dict{Int64, Set{Int64}}()
+        for f in F
+            s = Set{Int64}()
+            push!(s, f)
+            for k in 1:nb_duplicates
+                n_prime += 1
+                push!(s, n_prime)
+                push!(F_prime, n_prime)
+                push!(es, es[f])
+                push!(ls, ls[f])
+                push!(neighbors_in, neighbors_in[f])
+                push!(neighbors_out, neighbors_out[f])
+                for i in neighbors_in[f]
+                    push!(neighbors_out[i], n_prime)
+                    distances[(i, n_prime)] = distances[(i, f)]
+                    times[(i, n_prime)] = times[(i, f)]
+                    m_prime += 1
+                end
+                for j in neighbors_out[f]
+                    push!(neighbors_in[j], n_prime)
+                    distances[(n_prime, j)] = distances[(f, j)]
+                    times[(n_prime, j)] = times[(f, j)]
+                    m_prime += 1
+                end
+            end
+            duplicates[f] = s
+        end
+
+        # Put back end depot
+        n_prime += 1
+        push!(es, end_e)
+        push!(ls, end_l)
+        push!(neighbors_in, end_neighbors_in)
+        for i in end_neighbors_in
+            if i in F
+                for i_prime in duplicates[i]
+                    push!(neighbors_out[i_prime], n_prime)
+                    distances[(i_prime, n_prime)] =
+                        to_end_distances[(i, n_tot)]
+                    times[(i_prime, n_prime)] = to_end_times[(i, n_tot)]
+                    m_prime += 1
+                end
+            else
+                push!(neighbors_out[i], n_prime)
+                distances[(i, n_prime)] = to_end_distances[(i, n_tot)]
+                times[(i, n_prime)] = to_end_times[(i, n_tot)]
+                m_prime += 1
+            end
+        end
+
+        # Update
+        n_tot = n_prime
+        m = m_prime
+        F = F_prime
+
+    end
 
     # Output all data
     n_tot, m, r, g, Q, es, ls, I, F,
