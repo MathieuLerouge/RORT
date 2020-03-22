@@ -200,7 +200,6 @@ function solve_master(routes, n, I, distances)
     ## CONSTRAINTS ##
 
     # Delivery constraint
-    # ** WIP **
     @constraint(model, cst[i in I],
         sum( sum(routes[k][i,j]
             for j in 2:n+2 if (i,j) in keys(distances))*delta[k]
