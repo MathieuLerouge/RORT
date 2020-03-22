@@ -26,8 +26,8 @@ include("heuristic.jl")
 ## VARIABLES TO SET ##
 
 # Set boolean for measuring running time
-#measuring_time = true
-measuring_time = false
+measuring_time = true
+#measuring_time = false
 
 # Set boolean for simplifying the graph of connections
 # by removing unfeasible arcs
@@ -35,11 +35,11 @@ simplifying_graph = true
 #simplifying_graph = false
 
 # Set file_name
-#file_name = "E_data.txt"
+file_name = "E_data.txt"
 #file_name = "E_data_1.txt"
 #file_name = "E_data_2.txt"
 #file_name = "E_data_3.txt"
-file_name = "instance_8.txt"
+#file_name = "instance_8.txt"
 #file_name = "instance_42.txt"
 #file_name = "instance_86.txt"
 
@@ -47,7 +47,7 @@ file_name = "instance_8.txt"
 # - MILP: 1
 # - Column generation: 2
 # - Heuristic: 3
-algorithm_type = 2
+algorithm_type = 1
 
 ## OTHER VARIABLES ##
 
@@ -173,7 +173,7 @@ println("\n",
 # Run MILP
 total_distance, nb_vehicules, milp_solving_time = run_MILP(n, r, g, Q, es, ls,
     I, F_prime, neighbours_in, neighbours_out, distances, times, s, q, C)
-total_time += graph_simplification_time
+total_time += milp_solving_time
 
 # Display results
 println("- OPTIMAL VALUES")
@@ -215,8 +215,8 @@ println("\n",
 # Compile code if measuring time
 # Basically, run functions once so that they are all compiled
 if measuring_time
-    _, _ = prepare_column_generation(n_tot, I,
-        neighbours_in, neighbours_out, deepcopy(distances), deepcopy(times))
+    routes, _ = prepare_column_generation(n_tot, I,
+        neighbours_in, neighbours_out, distances, times)
     _, _, _ = run_column_generation(routes, false)
 end
 
